@@ -37,6 +37,101 @@ MUTATION_RATE = 0.3
 SEED_VALUE = 42
 ELITISM_COUNT = 2
 
+class RouteOptimizationEnvironment:
+    """Environment to handle input parsing, coordinates, and fitness logic.
+
+    The class reads `Tmax` and `Cmax` and the city coordinate table from the
+    provided input file. It exposes `calculate_fitness(route)` which returns a
+    tuple `(fitness_score, total_distance, total_time_hours)` where larger
+    fitness_score is better (so sorting ascending places worst first, best
+    last).
+    """
+    def __init__(self, input_filepath="inputPS15.txt", speed=SPEED):
+        self.input_filepath = input_filepath
+        self.speed = speed
+        self.Tmax = None
+        self.Cmax = None
+        self.city_coordinates = {}
+        self._load_input_file(input_filepath)
+
+    def _load_input_file(self, path):
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Input file not found: {path}")
+        with open(path, 'r') as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        # Expect first two non-empty lines to be Tmax and Cmax
+        try:
+            tline = lines[0]
+            cline = lines[1]
+            self.Tmax = float(tline.split('=')[1])
+            self.Cmax = float(cline.split('=')[1])
+        except Exception as e:
+            logging.error(f"Failed to parse Tmax/Cmax from {path}: {e}")
+            raise
+
+        for line in lines[2:]:
+            parts = line.split()
+            if len(parts) < 3:
+                continue
+            idx = int(parts[0])
+            x = float(parts[1])
+            y = float(parts[2])
+            self.city_coordinates[idx] = [x, y]
+
+        logging.info(f"Loaded input: Tmax={self.Tmax}, Cmax={self.Cmax}, "
+                     f"{len(self.city_coordinates)} cities from {path}")
+
+    def calculate_distance(self, route):
+        total_distance = 0.0
+        for i in range(len(route) - 1):
+            a, b = route[i], route[i + 1]
+            xa, ya = self.city_coordinates[a]
+            xb, yb = self.city_coordinates[b]
+            total_distance += ((xa - xb) ** 2 + (ya - yb) ** 2) ** 0.5
+        return round(total_distance, 2)
+
+    def calculate_time(self, distance):
+        return round(distance / self.speed, 2)
+
+    def calculate_fitness(self, route):
+        """Return (fitness_score, total_distance, total_time_hours).
+
+        Fitness is converted from a cost so that larger is better. Cost is
+        distance + time-weight + heavy penalties for constraint violations.
+        """
+        total_distance = self.calculate_distance(route)
+        total_time_hours = total_distance / self.speed
+
+        penalty = 0.0
+        if self.Cmax is not None and total_distance > self.Cmax:
+            penalty += (total_distance - self.Cmax) * 100.0
+        if self.Tmax is not None and total_time_hours > self.Tmax:
+            penalty += (total_time_hours - self.Tmax) * 100.0
+
+        cost = total_distance + (total_time_hours * 10.0) + penalty
+        fitness_score = 1.0 / (1.0 + cost)
+        return (fitness_score, round(total_distance, 2), round(total_time_hours, 2))
+
+    def write_output(self, best_route, best_dist, best_time, fitness,
+                     pop_size, generations, output_filepath="outputPS15.txt"):
+        lines = []
+        lines.append(f"Best Route: {' -> '.join(str(c) for c in best_route)}")
+        lines.append(f"Total Distance: {best_dist:.2f}")
+        lines.append(f"Total Time: {best_time:.2f} hours")
+        dist_status = "SATISFIED" if best_dist <= self.Cmax else "VIOLATED"
+        time_status = "SATISFIED" if best_time <= self.Tmax else "VIOLATED"
+        lines.append(f"Distance <= Cmax: {dist_status}")
+        lines.append(f"Time <= Tmax: {time_status}")
+        lines.append(f"Fitness: {fitness:.6f}")
+        lines.append("")
+        lines.append(f"Population Size: {pop_size}")
+        lines.append(f"Generations: {generations}")
+
+        with open(output_filepath, 'w') as f:
+            f.write('\n'.join(lines))
+        logging.info(f"Wrote output file: {output_filepath}")
+
 def is_valid_route(route):
     """
     Validates that a route is a valid solution to the TSP.
@@ -55,21 +150,7 @@ def is_valid_route(route):
     """
     return len(route) == 21 and route[0] == 0 and route[-1] == 0 and set(route[1:-1]) == set(range(1, 20))
 
-def generate_city_coordinates():
-    """
-    Generates random geographical coordinates for 20 cities.
 
-    Why: Simulates a real TSP scenario where cities have 2D positions.
-    The coordinates are used to calculate Euclidean distances between cities.
-    City 0 is the starting point, cities 1-19 are regular cities to visit.
-
-    Returns:
-        dict: Mapping of city ID to [x, y] coordinates (x, y both in range 1-100)
-    """
-    coordinates = {}
-    for i in range(20):
-        coordinates[i] = [random.randint(1, 100), random.randint(1, 100)]
-    return coordinates
 
 def generate_route():
     """
@@ -99,35 +180,7 @@ def populate_population():
     population = [generate_route() for _ in range(POPULATION_SIZE)]
     return population
 
-def fitness_function(route):
-    """
-    PLACEHOLDER FITNESS FUNCTION - Evaluates the quality of a route solution.
 
-    Why: Fitness determines which routes are "good" (short) vs "bad" (long).
-    Better fitness routes are more likely to be selected for breeding, guiding
-    evolution towards optimal solutions.
-
-    The fitness is calculated as:
-    1. Euclidean distance between consecutive cities in the route
-    2. Total time = total distance / SPEED
-
-    Args:
-        route (list): A route to evaluate
-
-    Returns:
-        list: [total_distance (km), total_time (hours)]
-
-    Note: Lower fitness values are better (shorter routes are fitter)
-    """
-    total_distance = 0
-    for i in range(len(route) - 1):
-        city_a = route[i]
-        city_b = route[i + 1]
-        distance = ((city_coordinates[city_a][0] - city_coordinates[city_b][0])**2 + 
-                    (city_coordinates[city_a][1] - city_coordinates[city_b][1])**2) ** 0.5
-        total_distance += distance
-    total_time = total_distance / SPEED
-    return [round(total_distance, 2), round(total_time, 2)]
 
 
 def build_rank_probabilities(pop_size):
@@ -290,8 +343,7 @@ def swap_mutation(child):
     return child
 
 if __name__ == "__main__":
-
-    # Setup logging with timestamp
+    # Setup logging
     logs_dir = "logs"
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
@@ -300,95 +352,78 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(log_filename),
-            # logging.StreamHandler()
-        ]
+        handlers=[logging.FileHandler(log_filename)]
     )
     
     random.seed(SEED_VALUE)
 
-    city_coordinates = generate_city_coordinates()
-    logging.info(f"City coordinates: {city_coordinates}")
+    # Initialize the Environment (handles I/O, coordinates, and fitness)
+    env = RouteOptimizationEnvironment(input_filepath="inputPS15.txt")
     
     population = populate_population()
 
-    # -------------------------------------------------------------------
-    # Main GA Loop with Elitism and Convergence Tracking
-    #
-    # Each generation:
-    #   1. Sort population by distance ascending (worst first, best last)
-    #   2. Build rank probability wheel once for this generation
-    #   3. Track the best distance and time for convergence analysis
-    #   4. Copy the top ELITISM_COUNT individuals directly into next gen
-    #   5. Fill remaining slots using rank selection -> crossover -> mutation
-    #   6. Replace old population with the new one
-    # -------------------------------------------------------------------
-
-    best_distances = []   # tracks best distance found at each generation
-    best_times = []       # tracks best time found at each generation
+    best_distances = []
+    best_times = []
 
     for gen in range(GENERATIONS):
 
-        # sort population by total distance (fitness_function returns [dist, time])
-        # ascending: index 0 = worst (longest), index -1 = best (shortest)
-        population.sort(key=lambda route: fitness_function(route)[0], reverse=True)
+        # Sort ascending by fitness score (worst fitness first, best fitness last)
+        population.sort(key=lambda route: env.calculate_fitness(route)[0])
 
-        # build the rank probability wheel once for this generation
         cumulative = build_rank_probabilities(len(population))
 
-        # last individual in sorted list is the current best (shortest distance)
         current_best = population[-1]
-        current_best_fitness = fitness_function(current_best)
-        best_distances.append(current_best_fitness[0])
-        best_times.append(current_best_fitness[1])
+        
+        # Unpack the new fitness tuple
+        current_best_score, current_best_dist, current_best_time = env.calculate_fitness(current_best)
+        best_distances.append(current_best_dist)
+        best_times.append(current_best_time)
 
-        logging.info(f"Generation {gen+1}: Best Distance = {current_best_fitness[0]}, Best Time = {current_best_fitness[1]}")
+        logging.info(f"Generation {gen+1}: Best Distance = {current_best_dist}, Best Time = {current_best_time}")
 
-        # --- Elitism: carry over the top ELITISM_COUNT routes unchanged ---
-        # best routes are at the end since we sorted ascending (worst first)
         new_population = []
         for i in range(ELITISM_COUNT):
             elite = population[-(i+1)]
             new_population.append(elite)
-            logging.info(f"Elite {i+1} preserved: fitness = {fitness_function(elite)}")
 
-        # --- Fill the rest through rank selection + crossover + mutation ---
         while len(new_population) < POPULATION_SIZE:
             parents = rank_selection(population, cumulative)
-            logging.info(f"Rank selection winners: {fitness_function(parents[0])}, {fitness_function(parents[1])}")
-
             child = ordered_crossover(parents)
-            logging.info(f"Child after crossover: {child}")
-
             child = swap_mutation(child)
-            logging.info(f"Child after mutation: {child}, fitness: {fitness_function(child)}")
-
             new_population.append(child)
 
         population = new_population
 
-        # print progress every 50 generations
         if (gen + 1) % 50 == 0 or gen == 0:
             print(f"Gen {gen+1:>4d} | Best Distance: {best_distances[-1]:.2f}  |  Best Time: {best_times[-1]:.2f}")
 
-    # --- Final results after all generations ---
-    population.sort(key=lambda route: fitness_function(route)[0])
-    best_route = population[0]
-    best_fitness = fitness_function(best_route)
+    # Final results
+    population.sort(key=lambda route: env.calculate_fitness(route)[0])
+    best_route = population[-1]
+    best_score, best_dist, best_time = env.calculate_fitness(best_route)
 
     print("\n" + "=" * 55)
     print("GA Run Complete")
     print("=" * 55)
     print(f"Best Route: {' -> '.join(str(c) for c in best_route)}")
-    print(f"Total Distance: {best_fitness[0]:.2f}")
-    print(f"Total Time:     {best_fitness[1]:.2f} hours")
+    print(f"Total Distance: {best_dist:.2f}")
+    print(f"Total Time:     {best_time:.2f} hours")
     print(f"\nConvergence:")
     print(f"  Distance: {best_distances[0]:.2f} -> {best_distances[-1]:.2f}")
     print(f"  Time:     {best_times[0]:.2f} -> {best_times[-1]:.2f}")
     print("=" * 55)
 
     logging.info(f"Final Best Route: {best_route}")
-    logging.info(f"Final Best Fitness: {best_fitness}")
+    logging.info(f"Final Best Fitness: {(best_score, best_dist, best_time)}")
     logging.info(f"Distance convergence: {best_distances[0]} -> {best_distances[-1]}")
     logging.info(f"Time convergence: {best_times[0]} -> {best_times[-1]}")
+
+    # Generate the strict required output file
+    env.write_output(
+        best_route=best_route,
+        best_dist=best_dist,
+        best_time=best_time,
+        fitness=best_score,
+        pop_size=POPULATION_SIZE,
+        generations=GENERATIONS
+    )
