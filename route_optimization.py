@@ -921,7 +921,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print("---------------------------------------------------")
     print(comparison_table(results))
     print()
-    print("Convergence:")
+    print("Convergence for Genetic Algorithm:")
     print(f"Best Distance {summarize_convergence(ga_result.best_distances)}")
     print(f"Best Time {summarize_convergence(ga_result.best_times)}")
     print(f"\nWrote {args.output}, plots, and execution log to {output_dir}")
