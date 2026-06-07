@@ -1,0 +1,27 @@
+PS15 Route Optimization - Execution Log
+
+Problem Formulation:
+Permutation-based route optimization with constraints on total distance and travel time.
+
+Representation:
+Permutation encoding with city 0 fixed as the start city.
+
+Operators Used:
+Ordered Crossover (OX), Swap Mutation, and Rank Selection.
+
+Constraint Handling:
+Cmax = 1100.0, Tmax = 150.0. Feasible routes are always preferred over infeasible routes.
+
+Alternative Modeling Approach:
+A Pareto-based approach such as NSGA-II could optimize distance and time separately.
+
+Results Summary:
+Method                Distance       Time     Fitness     Feasible
+--------------------------------------------------------------------
+Genetic Algorithm        441.90      55.24     0.3850   Yes
+Random Search            660.76      82.60     0.5757   Yes
+Hill Climbing            360.68      45.09     0.3142   Yes
+
+Best observed method: Hill Climbing
+GA distance convergence: improved from 809.45 -> 441.90
+GA time convergence: improved from 101.18 -> 55.24

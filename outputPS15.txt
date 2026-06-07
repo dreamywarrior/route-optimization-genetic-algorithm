@@ -1,0 +1,27 @@
+Genetic Algorithm Results
+-------------------------
+Best Route: 0 -> 7 -> 2 -> 16 -> 15 -> 10 -> 18 -> 14 -> 19 -> 12 -> 3 -> 9 -> 4 -> 13 -> 6 -> 5 -> 8 -> 17 -> 1 -> 11 -> 0
+Total Distance (Cost): 441.90
+Total Travel Time: 55.24 hours
+Constraints Status:
+Time <= Tmax : SATISFIED
+Cost <= Cmax : SATISFIED
+
+GA Parameters:
+Population Size = 120
+Generations = 500
+Crossover = Ordered Crossover (OX)
+Mutation = Swap Mutation
+Selection = Rank Selection
+
+Performance Comparison
+---------------------------------------------------
+Method                Distance       Time     Fitness     Feasible
+--------------------------------------------------------------------
+Genetic Algorithm        441.90      55.24     0.3850   Yes
+Random Search            660.76      82.60     0.5757   Yes
+Hill Climbing            360.68      45.09     0.3142   Yes
+
+Convergence:
+Best Distance improved from 809.45 -> 441.90
+Best Time improved from 101.18 -> 55.24
